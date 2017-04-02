@@ -11,8 +11,7 @@
  *
  */
 
-#include <glib.h>
-#include <stdarg.h>
+#include "qemu/osdep.h"
 
 #include "qemu-common.h"
 #include "test-qapi-types.h"
@@ -60,8 +59,8 @@ void qdict_cmp_do_simple(const char *key, QObject *obj1, void *opaque)
 
     switch (qobject_type(obj1)) {
     case QTYPE_QBOOL:
-        d->result = (qbool_get_int(qobject_to_qbool(obj1)) ==
-                     qbool_get_int(qobject_to_qbool(obj2)));
+        d->result = (qbool_get_bool(qobject_to_qbool(obj1)) ==
+                     qbool_get_bool(qobject_to_qbool(obj2)));
         return;
     case QTYPE_QINT:
         d->result = (qint_get_int(qobject_to_qint(obj1)) ==
@@ -94,26 +93,20 @@ static bool qdict_cmp_simple(QDict *a, QDict *b)
 
 /* This function is hooked as final emit function, which can verify the
    correctness. */
-static void event_test_emit(TEST_QAPIEvent event, QDict *d, Error **errp)
+static void event_test_emit(test_QAPIEvent event, QDict *d, Error **errp)
 {
-    QObject *obj;
     QDict *t;
     int64_t s, ms;
 
     /* Verify that we have timestamp, then remove it to compare other fields */
-    obj = qdict_get(d, "timestamp");
-    g_assert(obj);
-    t = qobject_to_qdict(obj);
+    t = qdict_get_qdict(d, "timestamp");
     g_assert(t);
-    obj = qdict_get(t, "seconds");
-    g_assert(obj && qobject_type(obj) == QTYPE_QINT);
-    s = qint_get_int(qobject_to_qint(obj));
-    obj = qdict_get(t, "microseconds");
-    g_assert(obj && qobject_type(obj) == QTYPE_QINT);
-    ms = qint_get_int(qobject_to_qint(obj));
+    s = qdict_get_try_int(t, "seconds", -2);
+    ms = qdict_get_try_int(t, "microseconds", -2);
     if (s == -1) {
         g_assert(ms == -1);
     } else {
+        g_assert(s >= 0);
         g_assert(ms >= 0 && ms <= 999999);
     }
     g_assert(qdict_size(t) == 2);
@@ -179,9 +172,7 @@ static void test_event_c(TestEventData *data,
     QDict *d, *d_data, *d_b;
 
     UserDefOne b;
-    UserDefZero z;
-    z.integer = 2;
-    b.base = &z;
+    b.integer = 2;
     b.string = g_strdup("test1");
     b.has_enum1 = false;
 
@@ -209,11 +200,9 @@ static void test_event_d(TestEventData *data,
 {
     UserDefOne struct1;
     EventStructOne a;
-    UserDefZero z;
     QDict *d, *d_data, *d_a, *d_struct1;
 
-    z.integer = 2;
-    struct1.base = &z;
+    struct1.integer = 2;
     struct1.string = g_strdup("test1");
     struct1.has_enum1 = true;
     struct1.enum1 = ENUM_ONE_VALUE1;
